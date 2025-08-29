@@ -21,8 +21,10 @@ namespace EncosyTower.Editor.AssemblyDefs
         [SerializeField] private ThemeStyleSheet _themeStyleSheet;
         [SerializeField] private StyleSheet _darkThemeStyleSheet;
         [SerializeField] private StyleSheet _lightThemeStyleSheet;
-
-        private TabView _tabView;
+        
+        private Toolbar _toolbar;
+        private ToolbarToggle _toggleAll;
+        private ToolbarToggle _toggleFiltered;
         private AssemblyReferenceTab _tabAll;
         private AssemblyReferenceTab _tabFiltered;
 
@@ -39,10 +41,10 @@ namespace EncosyTower.Editor.AssemblyDefs
             wantsMouseMove = true;
 
             var allReferences = (IReadOnlyList<AssemblyReferenceData>)assemblyData?.AllReferences
-                ?? Array.Empty<AssemblyReferenceData>();
+                                ?? Array.Empty<AssemblyReferenceData>();
 
             var filteredReferences = (IReadOnlyList<AssemblyReferenceData>)assemblyData?.FilteredReferences
-                ?? Array.Empty<AssemblyReferenceData>();
+                                     ?? Array.Empty<AssemblyReferenceData>();
 
             OnCreateGUI();
 
@@ -65,7 +67,7 @@ namespace EncosyTower.Editor.AssemblyDefs
 
         private void OnCreateGUI()
         {
-            if (_tabView != null)
+            if (_toolbar != null)
             {
                 return;
             }
@@ -73,14 +75,53 @@ namespace EncosyTower.Editor.AssemblyDefs
             rootVisualElement.styleSheets.Add(_themeStyleSheet);
             rootVisualElement.ApplyEditorStyleSheet(_darkThemeStyleSheet, _lightThemeStyleSheet);
 
+            var toolBar =  _toolbar = new Toolbar();
+            
             _tabAll = new AssemblyReferenceTab("All", Close);
             _tabFiltered = new AssemblyReferenceTab("Filtered", Close);
+          
+            _toggleAll = new ToolbarToggle { text = "All" };
+            _toggleFiltered = new ToolbarToggle { text = "Filtered" };
 
-            _tabView = new TabView();
-            _tabView.Add(_tabAll);
-            _tabView.Add(_tabFiltered);
+            _toggleAll.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue)
+                {
+                    _toggleFiltered.SetValueWithoutNotify(false);
+                    _tabAll.style.display = DisplayStyle.Flex;
+                    _tabFiltered.style.display = DisplayStyle.None;
+                }
+                else if (_toggleFiltered.value == false)
+                {
+                    _toggleAll.SetValueWithoutNotify(true);
+                }
+            });
 
-            rootVisualElement.Add(_tabView);
+            _toggleFiltered.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue)
+                {
+                    _toggleAll.SetValueWithoutNotify(false);
+                    _tabAll.style.display = DisplayStyle.None;
+                    _tabFiltered.style.display = DisplayStyle.Flex;
+                }
+                else if (_toggleAll.value == false)
+                {
+                    _toggleFiltered.SetValueWithoutNotify(true);
+                }
+            });
+
+            toolBar.Add(_toggleAll);
+            toolBar.Add(_toggleFiltered);
+
+            rootVisualElement.Add(toolBar);
+
+            rootVisualElement.Add(_tabAll);
+            rootVisualElement.Add(_tabFiltered);
+
+            _toggleAll.value = true;
+            _tabAll.style.display = DisplayStyle.Flex;
+            _tabFiltered.style.display = DisplayStyle.None;
         }
 
         private class ReferenceField : VisualElement
@@ -116,9 +157,7 @@ namespace EncosyTower.Editor.AssemblyDefs
                 _label = new(label);
                 _label.AddToClassList(ReferenceLabelUssClassName);
 
-                _objectField = new(string.Empty) {
-                    objectType = typeof(AssemblyDefinitionAsset)
-                };
+                _objectField = new(string.Empty) { objectType = typeof(AssemblyDefinitionAsset) };
 
                 _objectField.AddToClassList(ReferenceObjectUssClassName);
 
@@ -158,7 +197,7 @@ namespace EncosyTower.Editor.AssemblyDefs
             }
         }
 
-        private class AssemblyReferenceTab : Tab
+        private class AssemblyReferenceTab : VisualElement
         {
             public static readonly string ListViewUssClassName = "list-view";
             public static readonly string ListEmptyLabelUssClassName = "list-empty-label";
@@ -186,8 +225,10 @@ namespace EncosyTower.Editor.AssemblyDefs
             private AssemblyDefinitionInfo _assemblyDef;
             private bool _useGuid;
 
-            public AssemblyReferenceTab(string label, Action onClose) : base(label)
+            public AssemblyReferenceTab(string label, Action onClose)
             {
+                // Optional: set a name or class for styling per "tab"
+                this.name = $"assembly-reference-tab-{label?.ToLowerInvariant()}";
                 _onClose = onClose;
 
                 _emptyLabel = new Label("This list is empty");
@@ -198,15 +239,11 @@ namespace EncosyTower.Editor.AssemblyDefs
                 _container.AddToClassList(AssemblyContainerUssClassName);
                 Add(_container);
 
-                var selectButton = new Button(SelectButton_OnClick) {
-                    text = "Select all",
-                };
+                var selectButton = new Button(SelectButton_OnClick) { text = "Select all", };
 
                 selectButton.AddToClassList(SelectButtonUssClassName);
 
-                var deselectButton = new Button(DeselectButton_OnClick) {
-                    text = "Deselect all"
-                };
+                var deselectButton = new Button(DeselectButton_OnClick) { text = "Deselect all" };
 
                 deselectButton.AddToClassList(SelectButtonUssClassName);
 
@@ -233,15 +270,11 @@ namespace EncosyTower.Editor.AssemblyDefs
 
                 _container.Add(_listView);
 
-                var applyButton = new Button(ApplyButton_OnClick) {
-                    text = "OK",
-                };
+                var applyButton = new Button(ApplyButton_OnClick) { text = "OK", };
 
                 applyButton.AddToClassList(ApplyButtonUssClassName);
 
-                var cancelButton = new Button(CancelButton_OnClick) {
-                    text = "Cancel"
-                };
+                var cancelButton = new Button(CancelButton_OnClick) { text = "Cancel" };
 
                 cancelButton.AddToClassList(CancelButtonUssClassName);
 
@@ -253,9 +286,7 @@ namespace EncosyTower.Editor.AssemblyDefs
                 var applyGroup = new VisualElement();
                 applyGroup.AddToClassList(ApplyGroupUssClassName);
 
-                _applyAssembly = new("Apply to assembly") {
-                    objectType = typeof(AssemblyDefinitionAsset)
-                };
+                _applyAssembly = new("Apply to assembly") { objectType = typeof(AssemblyDefinitionAsset) };
 
                 _applyAssembly.AddToClassList(ApplyAssemblyUssClassName);
 
@@ -266,7 +297,7 @@ namespace EncosyTower.Editor.AssemblyDefs
             }
 
             public void Update(
-                  string assetPath
+                string assetPath
                 , AssemblyDefinitionAsset asset
                 , AssemblyDefinitionInfo assemblyDef
                 , bool useGuid
@@ -340,7 +371,7 @@ namespace EncosyTower.Editor.AssemblyDefs
             }
 
             private static void ApplyReferences(
-                  string assetPath
+                string assetPath
                 , AssemblyDefinitionInfo assemblyDef
                 , List<AssemblyReferenceData> references
                 , bool useGuid
